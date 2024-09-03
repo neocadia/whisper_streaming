@@ -31,7 +31,7 @@ class ASRBase:
     sep = " "   # join transcribe words with this character (" " for whisper_timestamped,
                 # "" for faster-whisper because it emits the spaces when neeeded)
 
-    def __init__(self, lan, modelsize=None, cache_dir=None, model_dir=None, logfile=sys.stderr):
+    def __init__(self, lan, modelsize=None, cache_dir=None, model_dir=None, logfile=sys.stderr, device_type="cuda", compute_type="float16", cpu_threads=None, num_workers=None):
         self.logfile = logfile
 
         self.transcribe_kargs = {}
@@ -40,10 +40,10 @@ class ASRBase:
         else:
             self.original_language = lan
 
-        self.model = self.load_model(modelsize, cache_dir, model_dir)
+        self.model = self.load_model(modelsize, cache_dir, model_dir, device_type, compute_type, cpu_threads, num_workers)
 
 
-    def load_model(self, modelsize, cache_dir):
+    def load_model(self, modelsize, cache_dir, model_dir, device_type, compute_type, cpu_threads, num_workers):
         raise NotImplemented("must be implemented in the child class")
 
     def transcribe(self, audio, init_prompt=""):
@@ -60,7 +60,7 @@ class WhisperTimestampedASR(ASRBase):
 
     sep = " "
 
-    def load_model(self, modelsize=None, cache_dir=None, model_dir=None):
+    def load_model(self, modelsize=None, cache_dir=None, model_dir=None, device_type="cuda", compute_type="float16", cpu_threads=None, num_workers=None):
         import whisper
         import whisper_timestamped
         from whisper_timestamped import transcribe_timestamped
@@ -103,7 +103,7 @@ class FasterWhisperASR(ASRBase):
 
     sep = ""
 
-    def load_model(self, modelsize=None, cache_dir=None, model_dir=None):
+    def load_model(self, modelsize=None, cache_dir=None, model_dir=None, device_type="cuda", compute_type="float16", cpu_threads=0, num_workers=1):
         from faster_whisper import WhisperModel
 #        logging.getLogger("faster_whisper").setLevel(logger.level)
         if model_dir is not None:
@@ -116,7 +116,7 @@ class FasterWhisperASR(ASRBase):
 
 
         # this worked fast and reliably on NVIDIA L40
-        model = WhisperModel(model_size_or_path, device="cuda", compute_type="float16", download_root=cache_dir)
+        model = WhisperModel(model_size_or_path, device=device_type, compute_type=compute_type, download_root=cache_dir, cpu_threads=cpu_threads, num_workers=num_workers)
 
         # or run on GPU with INT8
         # tested: the transcripts were different, probably worse than with FP16, and it was slightly (appx 20%) slower
@@ -124,7 +124,7 @@ class FasterWhisperASR(ASRBase):
 
         # or run on CPU with INT8
         # tested: works, but slow, appx 10-times than cuda FP16
-#        model = WhisperModel(modelsize, device="cpu", compute_type="int8") #, download_root="faster-disk-cache-dir/")
+        # model = WhisperModel(modelsize, device="cpu", compute_type="int8") #, download_root="faster-disk-cache-dir/")
         return model
 
     def transcribe(self, audio, init_prompt=""):
